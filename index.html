@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Finance Monitor</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="hdr-left">
+    <span class="logo">◈</span>
+    <div>
+      <h1>Finance Monitor</h1>
+      <p class="subtitle">Key Market Drivers &amp; Valuation Metrics</p>
+    </div>
+  </div>
+  <div class="hdr-center">
+    <nav class="tab-nav" role="tablist">
+      <button class="tab-btn active" data-tab="key-drivers" role="tab">Key Drivers</button>
+      <button class="tab-btn"        data-tab="wacc-builder" role="tab">WACC Builder</button>
+    </nav>
+  </div>
+  <div class="hdr-right">
+    <span class="updated-label">Updated <span id="last-updated">—</span></span>
+    <button id="refresh-btn" title="Clear cache &amp; reload">↺ Refresh</button>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     TAB 1 — Key Drivers
+═══════════════════════════════════════════════════════════════════════════ -->
+<main id="tab-key-drivers" class="tab-content active">
+
+  <div class="row row-2">
+    <!-- 10Y Treasury -->
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Risk-Free Rate</h2>
+          <p class="panel-sub">10-Year US Treasury Yield</p>
+        </div>
+        <div class="kpi">
+          <span class="kpi-val" id="t-val">—</span>
+          <span class="kpi-unit">%</span>
+          <span class="kpi-chg" id="t-chg"></span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="treasury-chart"></canvas></div>
+      <div class="panel-foot">
+        <span class="src">Source: ustreasuryyieldcurve.com</span>
+        <span class="data-tag" id="t-tag"></span>
+      </div>
+    </div>
+
+    <!-- ERP -->
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Equity Risk Premium</h2>
+          <p class="panel-sub">Damodaran Implied ERP — NYU Stern</p>
+        </div>
+        <div class="kpi">
+          <span class="kpi-val" id="e-val">—</span>
+          <span class="kpi-unit">%</span>
+          <span class="kpi-chg" id="e-chg"></span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="erp-chart"></canvas></div>
+      <div class="panel-foot">
+        <span class="src">Source: Aswath Damodaran, NYU Stern</span>
+        <span class="data-tag" id="e-tag"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-2">
+    <!-- Bond Spreads -->
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Default Spreads by Rating</h2>
+          <p class="panel-sub">Percentage points over risk-free rate (Moody's / S&amp;P)</p>
+        </div>
+      </div>
+      <div class="chart-wrap tall"><canvas id="spreads-chart"></canvas></div>
+      <div class="panel-foot">
+        <span class="src">Source: Aswath Damodaran, NYU Stern</span>
+        <span class="data-tag" id="s-tag"></span>
+      </div>
+    </div>
+
+    <!-- Industry Betas -->
+    <div class="panel">
+      <div class="panel-head betas-head">
+        <div>
+          <h2>Industry Betas</h2>
+          <p class="panel-sub">Unlevered (asset) betas by sector — Damodaran</p>
+        </div>
+        <div class="beta-controls">
+          <input id="beta-search" type="search" placeholder="Filter…" autocomplete="off" />
+          <select id="beta-sort">
+            <option value="name">A–Z</option>
+            <option value="asc">Beta ↑</option>
+            <option value="desc">Beta ↓</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="betas-table">
+          <thead><tr><th>Industry</th><th>Unlevered β</th><th>Risk</th></tr></thead>
+          <tbody id="betas-body"><tr><td colspan="3" class="loading-cell">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="panel-foot">
+        <span class="src">Source: Aswath Damodaran, NYU Stern</span>
+        <span class="data-tag" id="b-tag"></span>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     TAB 2 — WACC Builder
+═══════════════════════════════════════════════════════════════════════════ -->
+<main id="tab-wacc-builder" class="tab-content">
+  <div class="wacc-grid">
+
+    <!-- ── Inputs column ──────────────────────────────────────────────── -->
+    <div class="wacc-inputs-col">
+
+      <!-- Ticker lookup -->
+      <div class="panel wacc-panel">
+        <div class="panel-head">
+          <h2>Company Lookup</h2>
+          <p class="panel-sub">Pre-fill inputs from Yahoo Finance</p>
+        </div>
+        <div class="wacc-lookup-row">
+          <input id="wacc-ticker" type="text" placeholder="e.g. AAPL, MSFT, BA" autocomplete="off" />
+          <button id="wacc-load-btn">Load ↗</button>
+        </div>
+        <div id="wacc-company-card" class="company-card hidden">
+          <div class="company-name" id="wcc-name">—</div>
+          <div class="company-meta">
+            <span id="wcc-sector">—</span> · <span id="wcc-industry">—</span>
+          </div>
+          <div class="company-stats">
+            <div class="cs-item"><span class="cs-label">Market Cap</span><span class="cs-val" id="wcc-mcap">—</span></div>
+            <div class="cs-item"><span class="cs-label">Total Debt</span><span class="cs-val" id="wcc-debt">—</span></div>
+            <div class="cs-item"><span class="cs-label">Levered β (Yahoo)</span><span class="cs-val" id="wcc-beta-raw">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assumptions -->
+      <div class="panel wacc-panel">
+        <div class="panel-head">
+          <h2>Assumptions</h2>
+          <p class="panel-sub">Override any field — WACC recalculates instantly</p>
+        </div>
+        <div class="wacc-fields">
+
+          <div class="field-group">
+            <label>Risk-Free Rate (Rf) <span class="field-src">(10Y Treasury, live)</span></label>
+            <div class="field-row">
+              <input id="f-rf" type="number" step="0.01" min="0" max="20" />
+              <span class="field-unit">%</span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label>Equity Risk Premium (ERP) <span class="field-src">(Damodaran, live)</span></label>
+            <div class="field-row">
+              <input id="f-erp" type="number" step="0.01" min="0" max="20" />
+              <span class="field-unit">%</span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label>Levered Beta (β)</label>
+            <div class="field-row">
+              <input id="f-beta" type="number" step="0.01" min="0" max="5" placeholder="1.00" />
+              <span class="field-unit">×</span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label>Debt / Equity Ratio (D/E)</label>
+            <div class="field-row">
+              <input id="f-de" type="number" step="0.01" min="0" max="20" placeholder="0.00" />
+              <span class="field-unit">×</span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label>Marginal Tax Rate</label>
+            <div class="field-row">
+              <input id="f-tax" type="number" step="0.1" min="0" max="60" placeholder="21.0" />
+              <span class="field-unit">%</span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label>Credit Rating <span class="field-src">(sets cost of debt)</span></label>
+            <select id="f-rating">
+              <option value="Aaa/AAA">Aaa/AAA</option>
+              <option value="Aa1/AA+">Aa1/AA+</option>
+              <option value="Aa2/AA">Aa2/AA</option>
+              <option value="Aa3/AA-">Aa3/AA-</option>
+              <option value="A1/A+">A1/A+</option>
+              <option value="A2/A">A2/A</option>
+              <option value="A3/A-">A3/A-</option>
+              <option value="Baa1/BBB+">Baa1/BBB+</option>
+              <option value="Baa2/BBB" selected>Baa2/BBB</option>
+              <option value="Baa3/BBB-">Baa3/BBB-</option>
+              <option value="Ba1/BB+">Ba1/BB+</option>
+              <option value="Ba2/BB">Ba2/BB</option>
+              <option value="Ba3/BB-">Ba3/BB-</option>
+              <option value="B1/B+">B1/B+</option>
+              <option value="B2/B">B2/B</option>
+              <option value="B3/B-">B3/B-</option>
+              <option value="Caa/CCC">Caa/CCC</option>
+              <option value="Ca/CC">Ca/CC</option>
+              <option value="C">C</option>
+            </select>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /inputs-col -->
+
+    <!-- ── Results column ─────────────────────────────────────────────── -->
+    <div class="wacc-results-col">
+
+      <!-- WACC headline -->
+      <div class="panel wacc-panel wacc-headline-panel">
+        <div class="wacc-headline">
+          <div class="wacc-big-label">WACC</div>
+          <div class="wacc-big-val"><span id="r-wacc">—</span><span class="wacc-big-unit">%</span></div>
+          <div class="wacc-big-sub" id="r-wacc-sub">Weighted Average Cost of Capital</div>
+        </div>
+      </div>
+
+      <!-- Component breakdown -->
+      <div class="panel wacc-panel">
+        <div class="panel-head"><h2>Component Breakdown</h2></div>
+        <div class="wacc-breakdown">
+
+          <div class="breakdown-section">
+            <div class="breakdown-title">Cost of Equity (Ke) — CAPM</div>
+            <div class="breakdown-formula">Ke = Rf + β × ERP</div>
+            <div class="breakdown-items">
+              <div class="bi-row"><span class="bi-label">Risk-Free Rate (Rf)</span>   <span class="bi-val" id="r-rf">—</span></div>
+              <div class="bi-row"><span class="bi-label">Levered Beta (β)</span>        <span class="bi-val" id="r-beta">—</span></div>
+              <div class="bi-row"><span class="bi-label">Equity Risk Premium (ERP)</span><span class="bi-val" id="r-erp">—</span></div>
+              <div class="bi-row total"><span class="bi-label">= Cost of Equity (Ke)</span><span class="bi-val accent" id="r-ke">—</span></div>
+              <div class="bi-row weight"><span class="bi-label">Equity weight (E/V)</span><span class="bi-val" id="r-ew">—</span></div>
+            </div>
+          </div>
+
+          <div class="breakdown-section">
+            <div class="breakdown-title">Cost of Debt (Kd) — after tax</div>
+            <div class="breakdown-formula">Kd = (Rf + Spread) × (1 − t)</div>
+            <div class="breakdown-items">
+              <div class="bi-row"><span class="bi-label">Risk-Free Rate (Rf)</span>   <span class="bi-val" id="r-rf2">—</span></div>
+              <div class="bi-row"><span class="bi-label">Default Spread (rating)</span><span class="bi-val" id="r-spread">—</span></div>
+              <div class="bi-row"><span class="bi-label">Pre-tax cost of debt</span>  <span class="bi-val" id="r-kd-pre">—</span></div>
+              <div class="bi-row"><span class="bi-label">Tax shield (1 − t)</span>    <span class="bi-val" id="r-tax-shield">—</span></div>
+              <div class="bi-row total"><span class="bi-label">= After-tax Kd</span>  <span class="bi-val accent" id="r-kd">—</span></div>
+              <div class="bi-row weight"><span class="bi-label">Debt weight (D/V)</span><span class="bi-val" id="r-dw">—</span></div>
+            </div>
+          </div>
+
+          <div class="breakdown-section wacc-final-row">
+            <div class="breakdown-formula">WACC = (E/V)·Ke + (D/V)·Kd·(1−t)</div>
+            <div class="bi-row total big">
+              <span class="bi-label">WACC</span>
+              <span class="bi-val accent big" id="r-wacc2">—</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Capital structure bar -->
+      <div class="panel wacc-panel">
+        <div class="panel-head"><h2>Capital Structure</h2></div>
+        <div class="chart-wrap short"><canvas id="wacc-chart"></canvas></div>
+      </div>
+
+    </div><!-- /results-col -->
+  </div>
+</main>
+
+<!-- ── Toast ────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
